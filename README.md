@@ -9,10 +9,9 @@ Vital などのウェーブテーブル対応シンセサイザー向けに設�
 - 全23種類のモジュレーション／特殊機能を実装。
 - 数学的アルゴリズムによるリアルタイム合成。録音ベースではない高品位な波形生成。[file:1]
 
-## ダウンロード
+## 公開先
 
-- ツール本体: [ダウンロード](https://otodesk4193.github.io/WaveTableGenerator/)
-- マニュアルPDF: [WTGE マニュアル](./WTGEmaniyuaru.pdf)
+- ツール本体: [公開HP](https://otodesk4193.github.io/WaveTableGenerator/)
 
 ## 使用上の注意・免責事項
 
