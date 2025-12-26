@@ -11,7 +11,7 @@ Vital などのウェーブテーブル対応シンセサイザー向けに設�
 
 ## ダウンロード
 
-- ツール本体: [ダウンロード](./WaveTableGenerator.zip)
+- ツール本体: [ダウンロード](https://otodesk4193.github.io/WaveTableGenerator/)
 - マニュアルPDF: [WTGE マニュアル](./WTGEmaniyuaru.pdf)
 
 ## 使用上の注意・免責事項
