@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WaveTable Generator [Final Master]</title>
+<style>
+    /* UI Design: Light Theme */
+    :root { 
+        --bg: #f4f6f8; --panel: #ffffff; --text: #2c3e50; --border: #dae1e7; 
+        --accent: #e91e63; --accent-hover: #c2185b; 
+        --slot-bg: #fdfdfd; --active-slot: #fce4ec;
+        --ok: #27ae60; --warn: #e74c3c;
+    }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1000px; margin: 0 auto; line-height: 1.5; }
+    
+    .header { border-bottom: 3px solid var(--accent); padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    h1 { margin: 0; font-size: 1.5rem; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .tag { font-size: 0.8rem; background: var(--ok); color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: normal; }
+    .subtitle { font-size: 0.9rem; color: #666; font-weight: normal; margin-left: 10px; }
+
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tool-btn { background: #fff; border: 1px solid #ccc; color: #555; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
+    .tool-btn:hover { background: #f0f0f0; transform: translateY(-1px); border-color: var(--accent); color: var(--accent); }
+    
+    .grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 20px; }
+    .panel { background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid var(--border); }
+    
+    label { font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 6px; color: #555; }
+    select { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; background: #fff; font-weight: bold; }
+    
+    .info-box { background: #eef6fc; border-left: 4px solid var(--accent); padding: 10px; font-size: 0.85rem; color: #555; margin-top: 8px; border-radius: 0 4px 4px 0; min-height: 3em; }
+
+    .mod-slot { background: var(--slot-bg); padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 6px; transition: 0.2s; }
+    .mod-slot.active { background: var(--active-slot); border-left: 4px solid var(--accent); border-color: #f8bbd0; }
+    .mod-desc { font-size: 0.8rem; color: #666; margin: 5px 0; font-style: italic; min-height: 1.2em; display: block; }
+    
+    input[type=range] { width: 100%; height: 6px; background: #ddd; border-radius: 3px; -webkit-appearance: none; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent); border-radius: 50%; transition: 0.2s; }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    canvas { width: 100%; height: 140px; background: #222; border-radius: 4px; margin-bottom: 10px; border: 1px solid #444; }
+    
+    .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+    .main-btn { flex: 1; padding: 15px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s; color: #fff; }
+    .preview-btn { background: #34495e; }
+    .preview-btn:hover { background: #2c3e50; }
+    .preview-btn.playing { background: var(--ok); animation: pulse 1s infinite; }
+    
+    .dl-btn { background: var(--accent); }
+    .dl-btn:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(233, 30, 99, 0.3); }
+    .dl-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+    
+    /* LFO Checkbox */
+    .lfo-wrap { display: flex; align-items: center; gap: 5px; font-size: 0.85rem; font-weight: bold; color: var(--accent); cursor: pointer; float: right; }
+    .lfo-wrap input { width: auto; height: auto; accent-color: var(--accent); }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #777; font-size: 0.8rem; text-align: center; }
+
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>
+        WaveTable Generator 
+        <span class="tag">Final Master</span>
+    </h1>
+    <div class="toolbar">
+        <button class="tool-btn" onclick="setPreset('growl')">🦖 Growl</button>
+        <button class="tool-btn" onclick="setPreset('pad')">🎹 Pad</button>
+        <button class="tool-btn" onclick="setPreset('acid')">💊 Acid</button>
+        <button class="tool-btn" onclick="randomize()">🎲 Random</button>
+        <button class="tool-btn" onclick="resetAll()">🛑 Reset</button>
+    </div>
+</div>
+
+<div class="grid">
+    <!-- Left Column -->
+    <div>
+        <div class="panel">
+            <label>1. 基本波形を選択 (Base Waveform)</label>
+            <select id="catSelect" onchange="updateWaveList()" style="margin-bottom:10px; background:#f9f9f9;"></select>
+            <select id="waveSelect" onchange="updateWaveDesc(); updateState();"></select>
+            <div id="waveDesc" class="info-box">--</div>
+        </div>
+
+        <div class="panel">
+            <label>3. プレビュー & 保存</label>
+            <canvas id="scope" width="600" height="200"></canvas>
+            
+            <div style="margin-bottom:5px; overflow:hidden;">
+                <label style="float:left; color:#e91e63;">Wavetable Pos:</label>
+                <label class="lfo-wrap">
+                    <input type="checkbox" id="lfoToggle" onchange="updateState()"> Auto LFO
+                </label>
+            </div>
+            <!-- Pos Slider -->
+            <input type="range" id="posSlider" min="0" max="100" value="0" style="width:100%; background:#e91e63; margin-bottom:15px;" oninput="updateState()">
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <label style="margin:0;">音量 (Vol):</label>
+                <input type="range" id="volSlider" min="0" max="100" value="70" style="width:60%">
+            </div>
+
+            <div class="btn-group">
+                <button id="previewBtn" class="main-btn preview-btn" onclick="togglePreview()">🔊 試聴する (Preview)</button>
+                <button id="dlBtn" class="main-btn dl-btn" onclick="generateWav()">💾 WAVを保存 (Download)</button>
+            </div>
+            
+            <div id="status" style="text-align:center; font-size:0.8rem; color:#888; margin-top:5px;">Ready. (1024 Harmonics / 8x Oversampling)</div>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="panel">
+        <label>2. エフェクト設定 (Modulation Rack)</label>
+        <div id="modContainer"></div>
+    </div>
+</div>
+
+<div class="footer">
+    <p><strong>Unofficial Tool for Vital / Serum / Phase Plant</strong></p>
+    <p>Output Format: 2048 samples x 256 frames (32-bit Float / 8x Oversampling).</p>
+    <p>
+        【免責事項】<br>
+        本ツールおよび同梱マニュアルは無保証で提供されるものであり、その正確性・安全性・有用性についていかなる保証も行いません。
+本ツールの使用中には、高レベルの音量や突発的なピーク、極端な帯域の信号が発生する可能性があります。ヘッドホンやスピーカーを用いる際は、必ず音量を十分に下げた状態から再生を開始し、徐々に調整してください。また、リミッターやメーター類を併用し、耳およびスピーカー・オーディオ機器の保護に十分ご注意ください。
+本ツールの使用により生じたいかなる損害（聴覚への影響、耳鳴り等の健康被害、スピーカー・オーディオ機器・コンピュータの故障やデータ消失、その他の金銭的・精神的損害を含みます）についても、作者は一切の責任を負いません。ご利用者自身の判断と自己責任においてご使用ください。<br>
+        生成されたファイルはご自身の責任においてご使用ください。
+    </p>
+    <p>License: MIT (Free to use and distribute)</p>
+</div>
+
+<script>
+// =========================================================
+// 1. DSP KERNEL: 8x OVERSAMPLING & HIGH-PRECISION MATH
+// =========================================================
+const PI = Math.PI;
+const PI2 = Math.PI * 2;
+const OVERSAMPLE = 8; // 8x Oversampling for pristine quality
+
+// --- Helper Functions ---
+
+// Safe Sinc Function
+const sinc = (x) => (Math.abs(x) < 0.001) ? 1.0 : Math.sin(x) / x;
+
+// Safe Phase Wrap (0.0 to 1.0)
+// Math.floor handles negative numbers correctly unlike %
+const fract = (x) => x - Math.floor(x);
+
+// Lanczos Sigma Factor (Reduces Gibbs Phenomenon)
+const sigma = (k, m) => k === 0 ? 1.0 : Math.sin(PI * k / m) / (PI * k / m);
+
+// Schroeder Phase (Reduces Crest Factor / Improves Loudness)
+const getSchroederPhase = (k, count) => -PI * k * (k - 1) / count;
+
+// Chebyshev Polynomials
+const cheby = (n, x) => {
+    if(n===0) return 1;
+    if(n===1) return x;
+    return 2*x * cheby(n-1, x) - cheby(n-2, x);
+};
+
+// Additive Synthesis Engine (The Heart of High Quality)
+// Default count raised to 1024 (Nyquist for 2048 samples)
+const additive = (t, type, count=1024) => {
+    let v = 0;
+    
+    // Schroeder Phase formula helps distribute energy over time, avoiding spikes
+    const getPhase = (k) => -PI * k * (k - 1) / count;
+
+    if (type === 'saw') { 
+        for(let k=1; k <= count; k++) {
+            v += (Math.sin(t * PI2 * k + getPhase(k)) / k) * sigma(k, count); 
+        }
+        return v * 0.6; 
+    }
+    if (type === 'square') { 
+        for(let k=1; k <= count; k+=2) {
+            v += (Math.sin(t * PI2 * k + getPhase(k)) / k) * sigma(k, count); 
+        }
+        return v * 0.7; 
+    }
+    if (type === 'tri') { 
+        for(let k=1; k <= count; k+=2) {
+            v += Math.cos(t * PI2 * k) / (k*k); 
+        }
+        return v * 0.8; 
+    }
+    if (type === 'buzz') {
+        for(let k=1; k <= 128; k++) { // Limited to avoid harsh noise, but still rich
+            v += Math.sin(t * PI2 * k + getPhase(k)) * sigma(k, 128);
+        }
+        return v * 0.05;
+    }
+    return 0;
+};
+
+// --- WAVEFORM LIBRARY (50 Types / Final Master) ---
+const WAVE_LIB = {
+    "【基本】アナログ / ベーシック": [
+        { name: "Pure Sine (純粋サイン波)", func: (t)=>Math.sin(t*PI2), desc: "歪みのない純粋なサイン波です。サブベースやFMのキャリア（土台）として最適です。" },
+        { name: "High-Res Saw (高音質ノコギリ波)", func: (t)=>additive(t,'saw'), desc: "シュレーダー位相を用いた加算合成による、音圧が高くエイリアシングのない最高品質のノコギリ波です。" },
+        { name: "High-Res Square (高音質矩形波)", func: (t)=>additive(t,'square'), desc: "倍音加算合成による、デジタル臭さのない太くクリアな矩形波です。" },
+        { name: "BL Triangle (高音質三角波)", func: (t)=>additive(t,'tri'), desc: "高精度な三角波。フルートや丸いリード音、サブベースに適しています。" },
+        { name: "BL Pulse 10% (パルス波 細め)", func: (t)=>{let v=0;for(let k=1;k<128;k++)v+=Math.sin(k*Math.PI*0.1)/k*Math.cos(k*t*PI2)*sigma(k,128);return v*0.7}, desc: "デューティ比10%のパルス波。鼻にかかった鋭い音で、Acid Bassやチップチューンに必須です。" },
+        { name: "BL Pulse 25% (パルス波 太め)", func: (t)=>{let v=0;for(let k=1;k<128;k++)v+=Math.sin(k*Math.PI*0.25)/k*Math.cos(k*t*PI2)*sigma(k,128);return v*0.7}, desc: "デューティ比25%のパルス波。矩形波より少し細く、独特のキャラクターを持つクラシックなシンセ音です。" },
+        { name: "Soft Saw (Moog風)", func: (t)=>Math.sin(t*PI2)-0.5*Math.sin(t*PI2*2)-0.3*Math.sin(t*PI2*3), desc: "低次倍音のみで構成された柔らかいソー波。Moog等のアナログシンセのフィルターを通したような音です。" },
+        { name: "Odd Harmonics Saw (奇数倍音Saw)", func: (t)=>{let v=0;for(let k=1;k<64;k+=2)v+=Math.sin(t*PI2*k)/k;return v*0.6}, desc: "奇数倍音のみを持つノコギリ波。矩形波に近いですが、よりエッジの効いた独特の響きです。" },
+        { name: "Buzz Saw (全倍音ノコギリ)", func: (t)=>additive(t,'buzz', 64), desc: "全倍音を均等な強さで加算した攻撃的な波形。アナログシンセの「Raw」な音で、フィルターの掛かりが抜群です。" },
+        { name: "Square-Saw (ハイブリッド)", func: (t)=>{let v=0;for(let k=1;k<64;k++)v+=Math.sin(t*PI2*k)/(k*(k%2==0?2:1));return v*0.6}, desc: "偶数倍音を半分だけ削ったハイブリッド波形。矩形波の中空感とノコギリ波の太さをいいとこ取りした音です。" }
+    ],
+    "【歪み】サチュレーション / シェイプ": [
+        { name: "Hard Clip (ハードクリップ)", func: (t)=>Math.max(Math.min(Math.sin(t*PI2)*3,1),-1), desc: "サイン波の上下をバッサリ切り取った波形です。音圧が高く、激しいダブステップのベースに向いています。" },
+        { name: "Tube Sat (真空管)", func: (t)=>Math.tanh(Math.sin(t*PI2)*5), desc: "真空管アンプを通したような、温かく粘りのある歪みです。倍音が豊かで太い音になります。" },
+        { name: "Donk Fold (FMベース)", func: (t)=>Math.sin(Math.sin(t*PI2)*3), desc: "サイン波の中にサイン波を折り込んだ波形です。FM音源のような金属的な響きを持つ「Donk Bass」になります。" },
+        { name: "Quadratic Shaper (2乗)", func: (t)=>Math.pow(Math.sin(t*PI2),2)*2-1, desc: "入力信号を二乗した波形。偶数次倍音が強調され、オクターブ上の成分が強く出ます。" },
+        { name: "Soft Rectifier (ソフト整流)", func: (t)=>Math.sqrt(Math.abs(Math.sin(t*PI2)))*2-1, desc: "サイン波の絶対値の平方根。全波整流に似ていますが、より太く滑らかな倍音を持ちます。" },
+        { name: "Fuzz Wave (ファズ)", func: (t)=>cheby(3, Math.sin(t*PI2))*0.7 + 0.3*cheby(9, Math.sin(t*PI2)), desc: "低次と高次の多項式歪みを混合。ギターのファズエフェクターのような粒の粗い歪みです。" },
+        { name: "Sine Fold (折り返し)", func: (t)=>Math.sin(Math.sin(t*PI2)*3), desc: "サイン波をサイン波で折り返した波形。FM音源のような金属的で複雑な響きです。" },
+        { name: "Tri Fold (三角波折り返し)", func: (t)=>Math.sin(additive(t,'tri')*4), desc: "三角波をウェーブフォルダーに通した音。Sine Foldより鋭く、攻撃的な倍音成分を持ちます。" },
+        { name: "Asymmetric Dist (非対称)", func: (t)=>Math.sin(t*PI2) + 0.5*Math.pow(Math.sin(t*PI2),2), desc: "非対称な歪みを加えた波形。真空管アンプのような、偶数倍音を含む温かいサチュレーションです。" },
+        { name: "Rectified (半波整流)", func: (t)=>Math.max(Math.sin(t*PI2),0), desc: "マイナス側をカットした波形です。オクターブ上の音が重なったような独特の芯のある音です。" }
+    ],
+    "【金属】FM / メタリック": [
+        { name: "Simple FM (基本)", func: (t)=>Math.sin(t*PI2+Math.sin(t*PI2)), desc: "1:1の比率で変調した基本のFMサウンドです。太く、少し金属的なベースラインを作るのに最適です。" },
+        { name: "Octave FM (オクターブ)", func: (t)=>Math.sin(t*PI2+Math.sin(t*PI2*2)), desc: "オクターブ上の倍音で変調したFMです。鋭く突き刺さるような、硬い金属音が特徴です。" },
+        { name: "Power FM (5度)", func: (t)=>Math.sin(t*PI2*2+Math.sin(t*PI2*3)), desc: "完全5度の関係で変調しています。エレキギターのパワーコードのような、厚みのある響きです。" },
+        { name: "Bell FM (ベル音)", func: (t)=>Math.sin(t*PI2+Math.sin(t*PI2*5.4)), desc: "非整数倍音を含むFMです。音程感が曖昧な、鐘（ベル）やゴングのような不気味な金属音になります。" },
+        { name: "Feedback (ノイズFM)", func: (t)=>Math.sin(t*PI2+Math.sin(t*PI2)*3), desc: "自分自身で強く変調（フィードバック）した音です。崩壊したような激しいホワイトノイズ的なFMです。" },
+        { name: "Self FM (自己変調)", func: (t)=>Math.sin(t*PI2 + Math.sin(t*PI2)*2), desc: "自分自身で周波数変調をかけた波形。ノイズを含んだ激しいFMサウンドです。" },
+        { name: "PD Saw (位相変調Saw)", func: (t)=>Math.sin((t+0.5*Math.sin(t*PI2))*PI2), desc: "位相歪み（PD）によってサイン波をノコギリ波に近づけた音。Casio CZシリーズ風の質感です。" },
+        { name: "PD Double Peak (2ピーク)", func: (t)=>Math.sin(t*PI2 + Math.sin(4*t*PI2)), desc: "1周期の中に2つのピークを持つPD波形。フォルマントのような共鳴感があります。" },
+        { name: "Kink Phase (ビヨーン)", func: (t)=>Math.sin(Math.pow(t, 2.5)*PI2), desc: "位相の読み出し速度を指数関数的に歪ませた音。独特の「ビヨーン」という粘りがあります。" },
+        { name: "Feedback Square (矩形FM)", func: (t)=>{let s=Math.sin(t*PI2); return Math.sin(t*PI2 + s*s*5)}, desc: "二乗したサイン波でフィードバック変調。予測不能な倍音変化をするカオスな音です。" }
+    ],
+    "【和音】コード / オルガン": [
+        { name: "Major Chord (メジャー)", func: (t)=>(Math.sin(t*PI2*4) + Math.sin(t*PI2*5) + Math.sin(t*PI2*6))/3, desc: "【純正律】4:5:6の倍音を使用したメジャーコード。唸りのない、透き通るような美しい和音です。" },
+        { name: "Minor Chord (マイナー)", func: (t)=>(Math.sin(t*PI2*10) + Math.sin(t*PI2*12) + Math.sin(t*PI2*15))/3, desc: "【純正律】10:12:15の倍音を使用したマイナーコード。濁りのない、悲しげで透明感のある響きです。" },
+        { name: "Maj7 Chord (メジャー7)", func: (t)=>(Math.sin(t*PI2*8) + Math.sin(t*PI2*10) + Math.sin(t*PI2*12) + Math.sin(t*PI2*15))/4, desc: "【純正律】Root, M3, 5th, M7th を含むお洒落な和音。ジャズやLo-Fi HipHopに最適な浮遊感のある響き。" },
+        { name: "Min7 Chord (マイナー7)", func: (t)=>(Math.sin(t*PI2*10) + Math.sin(t*PI2*12) + Math.sin(t*PI2*15) + Math.sin(t*PI2*18))/4, desc: "【純正律】Root, m3, 5th, m7th の構成。ハウスやテクノのスタブに最強の、深みのある都会的なコード。" },
+        { name: "Sus4 Chord (サスフォー)", func: (t)=>(Math.sin(t*PI2*6) + Math.sin(t*PI2*8) + Math.sin(t*PI2*9))/3, desc: "【純正律】Root, 4th, 5th。解決を待つような、緊張感と宇宙的な広がりを感じるトランス向け和音。" },
+        { name: "Drawbar Organ (オルガン)", func: (t)=>Math.sin(t*PI2)+.5*Math.sin(t*PI2*2)+.3*Math.sin(t*PI2*3), desc: "ハモンドオルガンのドローバーを引いたような音です。ハウスやジャズで使える伝統的なオルガンサウンド。" },
+        { name: "Hollow (木管風)", func: (t)=>Math.sin(t*PI2)+Math.sin(t*PI2*3)/3+Math.sin(t*PI2*5)/5, desc: "奇数倍音のみを加算した音です。矩形波に似ていますが、より柔らかく、中身が空洞の木管楽器のような音がします。" },
+        { name: "Octave Stack (パッド用)", func: (t)=>Math.sin(t*PI2)+.5*Math.sin(t*PI2*2)+.25*Math.sin(t*PI2*4), desc: "3オクターブ分のサイン波を重ねた音です。壮大なパッドや、EDMのリード音のレイヤーに使えます。" },
+        { name: "Liquid Saw (液体Saw)", func: (t)=>Math.sin(t*PI2)+Math.sin(t*PI2*2)/2+Math.sin(t*PI2*3)/3, desc: "倍音を足して作った擬似的なソー波です。本物のソー波より滑らかで、「液体的」な質感の音です。" },
+        { name: "Spectral Cluster (クラスター)", func: (t)=>Math.sin(t*PI2) + 0.3*Math.sin(1.1*t*PI2) + 0.2*Math.sin(1.2*t*PI2), desc: "周波数が近い複数のサイン波の集合。コーラスがかかったような、うねりのある持続音です。" }
+    ],
+    "【特殊】声 / 数学 / デジタル": [
+        { name: "Hyper Saw (スーパーソー)", func: (t)=>{let v=0; const n=7; for(let i=0; i<n; i++){ let p=t+i*0.61803398875; v+=(1-2*fract(p)); } return v*0.2;}, desc: "7つのノコギリ波の位相を黄金比で分散させ、音圧を最適化したスーパーソー。1オシレーターで分厚い音が出ます。" },
+        { name: "Real Vocal 'Ah' (声アー)", func: (t)=>{let x=fract(t); return Math.sin(x*PI2*4)*Math.exp(-2*x) + Math.sin(x*PI2*8)*Math.exp(-4*x)*0.5 + Math.sin(x*PI2*12)*Math.exp(-8*x)*0.3}, desc: "【NEW】F1/F2/F3共鳴を持つリアルな母音「アー」。有機的で太い声。" },
+        { name: "Real Vocal 'Ee' (声イー)", func: (t)=>{let x=fract(t); return Math.sin(x*PI2*3)*Math.exp(-1.5*x) + Math.sin(x*PI2*20)*Math.exp(-6*x)*0.4 + Math.sin(x*PI2*28)*Math.exp(-10*x)*0.2}, desc: "【NEW】高域の共鳴が特徴的な母音「イー」。抜けの良い明るい声質。" },
+        { name: "Real Vocal 'Oo' (声ウー)", func: (t)=>{let x=fract(t); return Math.sin(x*PI2*3)*Math.exp(-1.5*x) + Math.sin(x*PI2*8)*Math.exp(-3*x)*0.6 + Math.sin(x*PI2*20)*Math.exp(-8*x)*0.1}, desc: "【NEW】低い周波数に成分が集まった母音「ウー」。こもったベースサウンドに最適。" },
+        { name: "Real Vocal 'Eh' (声エー)", func: (t)=>{let x=fract(t); return Math.sin(x*PI2*5)*Math.exp(-2*x) + Math.sin(x*PI2*17)*Math.exp(-5*x)*0.4 + Math.sin(x*PI2*24)*Math.exp(-8*x)*0.2}, desc: "【NEW】アーとイーの中間的な母音「エー」。シンセリードによく合う声。" },
+        { name: "Real Vocal 'Oh' (声オー)", func: (t)=>{let x=fract(t); return Math.sin(x*PI2*5)*Math.exp(-2*x) + Math.sin(x*PI2*9)*Math.exp(-3*x)*0.5 + Math.sin(x*PI2*22)*Math.exp(-8*x)*0.1}, desc: "【NEW】アーとウーの中間的な母音「オー」。力強い合唱のような声。" },
+        { name: "Fibonacci (フィボナッチ)", func: (t)=>{let v=0,n=1,p=1;for(let i=0;i<8;i++){v+=Math.sin(t*PI2*n)/n;let temp=n;n+=p;p=temp;}return v*0.5}, desc: "フィボナッチ数列(1,2,3,5,8...)の倍音を加算。自然界の法則に基づいた、有機的で不思議なリード音。" },
+        { name: "Prime Series (素数)", func: (t)=>{let p=[2,3,5,7,11,13,17,19,23,29];let v=0;p.forEach(k=>v+=Math.sin(t*PI2*k)/k);return v*0.5}, desc: "素数倍音（2,3,5,7...）のみを加算。整数倍音の中で「割り切れない」成分だけが残り、独特の粗さがあるベース音。" },
+        { name: "Pink Noise (1/f ゆらぎ)", func: (t)=>{let v=0;for(let k=1;k<64;k++)v+=Math.sin(t*PI2*k + Math.random()*PI2)/Math.sqrt(k);return v*0.4}, desc: "1/fゆらぎを持つピンクノイズ（ループ仕様）。ホワイトノイズより柔らかく、Lo-Fiなテクスチャやパッドの空気感に最適。" },
+        { name: "Win Sync (トーキング)", func: (t)=>Math.sin(t*PI2*10)*(1-Math.cos(t*PI2))*.5, desc: "窓関数をかけたシンク音です。フィルタを使わずに、トーキング・モジュレーターのような音を作れます。" },
+        { name: "Sinc (ブリックウォール)", func: (t)=>sinc((t-.5)*20), desc: "Sinc関数。非常に硬く、デジタルな質感が特徴です。" },
+        { name: "Bitcrush (ビット落ち)", func: (t)=>Math.floor(Math.sin(t*PI2)*5)/5, desc: "階段状にカクカクさせた音です。解像度の低い、バリバリとしたLo-Fiなデジタル音です。" },
+        { name: "Robotic Step (ロボット)", func: (t)=>{let s=8; return Math.floor(Math.sin(t*PI2)*s)/s}, desc: "振幅を階段状に量子化したサイン波。ビットクラッシャーを通したようなロボットボイス風です。" },
+        { name: "Bytebeat (ビット演算)", func: (t)=>{let s=Math.floor(t*4096); return ((s&(s>>8))%256)/128-1}, desc: "ビット演算(t & t>>8)で生成された波形。ファミコンがバグったような、周期的なデジタルノイズパターンです。" }
+    ]
+};
+
+// --- MODULATION LIBRARY (30 Types / High-Res) ---
+const MOD_LIB = [
+    { name: "-- None --", type: "none", desc: "モジュレーションを使用しません。" },
+    
+    // Phase Mods
+    { name: "Shepard Phase (無限上昇)", type: "phase", func: (t,a)=>t + a*Math.sin(t*PI2*(1+a*10))*0.1, desc: "位相にフラクタルな変換をかけ、音程が変わらないのに倍音が無限に上昇し続けるような錯覚効果（シェパードトーン）を作ります。" },
+    { name: "Exponential FM (指数FM)", type: "phase", func: (t,a)=>t + Math.exp(Math.sin(t*PI2)*a*3)*0.1, desc: "位相を指数関数的に歪ませるFM。通常のFMより変化が急激で、悲鳴のような鋭い金属音変化を生みます。" },
+    { name: "Mirror Quantize (鏡面量子化)", type: "phase", func: (t,a)=>{let s=2+(1-a)*50; return Math.abs(t - Math.floor(t*s)/s)*2}, desc: "時間軸を階段状にする際、余った部分を切り捨てずに折り返します。非常に複雑なデジタルノイズで、グリッチサウンドに最適です。" },
+    { name: "Formant Squeeze (中心圧縮)", type: "phase", func: (t,a)=>{let w=0.5*(1-a); return (t>0.5-w && t<0.5+w) ? (t-(0.5-w))/(2*w) : 0}, desc: "波形の両端を中央に向かって圧縮し、隙間をゼロ埋めします。擬似的に波長が短くなり、ワウペダルのような「ワウ」という変化になります。" },
+    { name: "Time Mirror (時間反転)", type: "phase", func: (t,a)=>(a>0.5 && t>0.5) ? 1-t : t, desc: "波形の後半を前半の鏡写し（反転）にします。カオスな波形が一瞬でシンメトリーになり、不思議な倍音が生まれます。" },
+    { name: "Disperser (レーザー)", type: "phase", func: (t,a)=>t+Math.sin(t*PI2)*a*0.2, desc: "オールパスフィルタによる位相のズレ（Chirp）を加えます。「ビョッ」というウェットなアタック感を作ります。" },
+    { name: "FM (Metal / グロウル)", type: "phase", func: (t,a)=>t+Math.sin(t*PI2)*a*3.0, desc: "基本のFM（周波数変調）です。値を上げると金属的な響きが加わり、Skrillex風のグロウルベースになります。" },
+    { name: "Hard Sync (強同期)", type: "phase", func: (t,a)=>t*(1+a*8), desc: "波形の周期を強制的にリセットしてピッチを上げます。「ギュイーン」という鋭いリード音の定番です。" },
+    { name: "PWM (パルス幅)", type: "phase", func: (t,a)=>t+a*0.5, desc: "波形の読み出し位置をズラします。矩形波で使うとパルス幅変調（PWM）になりますが、他の波形でもコーラス効果が出ます。" },
+    { name: "Bend Warp (伸縮)", type: "phase", func: (t,a)=>Math.pow(t,Math.pow(2,(a-.5)*4)), desc: "波形全体を左右に伸縮させます。SerumのWarpモードに近い、粘りのある変化を作ります。" },
+    { name: "Quantize Time (S&H)", type: "phase", func: (t,a)=>{let s=2+(1-a)*100;return Math.floor(t*s)/s}, desc: "時間軸を階段状にします（サンプル＆ホールド）。昔のデジタル楽器のような、ガラガラした粗い音になります。" },
+
+    // Shape / Post Mods
+    { name: "Crossover Dist (クロスオーバー)", type: "post", func: (v,t,a)=>(Math.abs(v)<a*0.5)?0:v, desc: "波形がゼロを横切る瞬間だけ信号を中抜けさせます。B級アンプの歪みのような、ザラザラとした汚れた質感。" },
+    { name: "Sineify (サイン化)", type: "post", func: (v,t,a)=>Math.sin(v*Math.PI*(1-a*0.5)), desc: "どんな波形も、適用量を上げると徐々にサイン波へと丸まっていく逆サチュレーション。激しい音を一瞬でサブベース化できます。" },
+    { name: "Fold Chebyshev (多項式折返)", type: "post", func: (v,t,a)=>cheby(Math.floor(1+a*5), v), desc: "チェビシェフ多項式を用いた音楽的な折り返し歪み。単純なFoldより倍音が濁らず、West Coast系の上品な倍音が付加されます。" },
+    { name: "Rectify Inverted (反転整流)", type: "post", func: (v,t,a)=>-1*Math.abs(v)*(1+a), desc: "波形のマイナス側をプラスに折り返した後、さらに全体を反転させます。通常のRectifyより過激で、突き刺さるようなリード音になります。" },
+    { name: "Pulseify (パルス化)", type: "post", func: (v,t,a)=>(v > (a-0.5)*2) ? 1 : -1, desc: "どんな波形でも、しきい値を超えたら「1か-1」にしてしまいます。複雑な波形を無理やり矩形波にする過激なコンプ効果。" },
+    { name: "Reverb (Comb / 空間)", type: "post", func: (v,t,a)=>v+0.6*Math.sin(t*PI2+a*20), desc: "非常に短い遅延を足し合わせるコムフィルタ効果です。SerumのReverb Filterのような、金属的で空間的な広がりを作ります。" },
+    { name: "Diffusion (拡散ノイズ)", type: "post", func: (v,t,a)=>{ 
+        // Improved All-Pass Diffusion
+        let spread = Math.sin(t*PI2*50*(1+a));
+        return v + spread*a*0.05; 
+    }, desc: "位相を微細に震わせ、音の輪郭をぼかします。リバーブの「空気感」や、集団で鳴らしたような厚みを付加します。" },
+    { name: "Bitcrush (ビット落ち)", type: "post", func: (v,t,a)=>{if(a==0)return v;let s=Math.pow(2,1+(1-a)*16);return Math.floor(v*s)/s}, desc: "波形を階段状にして解像度を下げます。バリバリとしたLo-Fiでデジタルな破壊音を加えます。" },
+    { name: "Fold Dist (基本折返)", type: "post", func: (v,t,a)=>Math.sin(v*(1+a*5)), desc: "波形が上限を超えたら折り返します（Wavefolder）。West Coastシンセのような、複雑で豊かな倍音を生みます。" },
+    { name: "Saturator (太さ)", type: "post", func: (v,t,a)=>Math.tanh(v*(1+a*10)), desc: "音量を持ち上げてからtanh関数で潰します。アナログ機材のような太さと、自然な歪みを加えます。" },
+    { name: "Dimension Exp (疑似ステレオ)", type: "post", func: (v,t,a)=>v - 0.5 * Math.sin((t-0.001)*PI2)*a, desc: "原音と、わずかに遅らせて反転した音をミックスします。特定の周波数がキャンセルされ、音が奥に引っ込んだような空間的な響きになります。" },
+    { name: "Slew Limiter (LPF)", type: "post", func: (v,t,a)=>(v + Math.sin((t-a*0.01)*PI2))/2, desc: "波形の急激な変化（崖）を検知して、斜面にならします。実質的なローパスフィルターとして機能し、音をマイルドにします。" }
+];
+
+const SLOT_COUNT = 3;
+
+// =========================================================
+// 2. UI LOGIC (Safe Initialization)
+// =========================================================
+window.onload = function() {
+    // Dropdowns
+    const catSelect = document.getElementById('catSelect');
+    Object.keys(WAVE_LIB).forEach(c => {
+        let o = document.createElement('option'); o.value = c; o.innerText = c; catSelect.appendChild(o);
+    });
+
+    // Slots
+    const modContainer = document.getElementById('modContainer');
+    for (let i = 0; i < SLOT_COUNT; i++) {
+        let div = document.createElement('div');
+        div.className = 'mod-slot';
+        div.innerHTML = `
+            <div class="slot-header">
+                <select id="type_${i}" class="slot-select" onchange="onModSelect(${i})">
+                    ${MOD_LIB.map((m, idx) => `<option value="${idx}">${m.name}</option>`).join('')}
+                </select>
+                <label class="link-check">
+                    <input type="checkbox" id="link_${i}" checked onchange="updateState()">
+                    <span>LINK Y</span>
+                </label>
+            </div>
+            <div id="modDesc_${i}" class="mod-desc">--</div>
+            <input type="range" id="amt_${i}" min="0" max="100" value="0" oninput="updateState()">
+        `;
+        modContainer.appendChild(div);
+    }
+    
+    // Explicit Init
+    catSelect.selectedIndex = 0;
+    updateWaveList();
+    for(let i=0; i<SLOT_COUNT; i++) onModSelect(i, false);
+    
+    // Start Loop
+    requestAnimationFrame(animateScope);
+};
+
+function updateWaveList() {
+    const cat = document.getElementById('catSelect').value;
+    const wSel = document.getElementById('waveSelect');
+    wSel.innerHTML = "";
+    if (WAVE_LIB[cat]) {
+        WAVE_LIB[cat].forEach((w, i) => {
+            let o = document.createElement('option'); o.value = i; o.innerText = w.name; wSel.appendChild(o);
+        });
+        wSel.selectedIndex = 0;
+    }
+    updateWaveDesc();
+    updateState();
+}
+
+function updateWaveDesc() {
+    const cat = document.getElementById('catSelect').value;
+    const idx = document.getElementById('waveSelect').value;
+    if (WAVE_LIB[cat] && WAVE_LIB[cat][idx]) {
+        document.getElementById('waveDesc').innerText = WAVE_LIB[cat][idx].desc;
+    }
+}
+
+function updateState() { /* handled by loop */ }
+
+function onModSelect(i, autoRaise=true) {
+    let idx = document.getElementById(`type_${i}`).value;
+    let slot = document.getElementsByClassName('mod-slot')[i];
+    let desc = document.getElementById(`modDesc_${i}`);
+    let slider = document.getElementById(`amt_${i}`);
+    
+    desc.innerText = MOD_LIB[idx].desc;
+    if(MOD_LIB[idx].type !== 'none') {
+        slot.classList.add('active');
+        if(autoRaise && slider.value == 0) slider.value = 50; 
+    } else {
+        slot.classList.remove('active');
+        if(autoRaise) slider.value = 0;
+    }
+    updateState();
+}
+
+function resetAll() {
+    document.getElementById('catSelect').selectedIndex = 0;
+    updateWaveList();
+    for(let i=0; i<SLOT_COUNT; i++) {
+        document.getElementById(`type_${i}`).value = 0;
+        document.getElementById(`amt_${i}`).value = 0;
+        onModSelect(i);
+    }
+    document.getElementById('lfoToggle').checked = false;
+    document.getElementById('posSlider').value = 0;
+}
+
+function randomize() {
+    resetAll();
+    const cats = Object.keys(WAVE_LIB);
+    document.getElementById('catSelect').value = cats[Math.floor(Math.random() * cats.length)];
+    updateWaveList();
+    const wOpts = document.getElementById('waveSelect').options;
+    document.getElementById('waveSelect').selectedIndex = Math.floor(Math.random() * wOpts.length);
+    
+    const numMods = Math.floor(Math.random() * 2) + 1;
+    for(let i=0; i<numMods; i++) {
+        const rIdx = Math.floor(Math.random() * (MOD_LIB.length - 1)) + 1;
+        document.getElementById(`type_${i}`).value = rIdx;
+        document.getElementById(`amt_${i}`).value = Math.floor(Math.random()*60)+20;
+        onModSelect(i);
+    }
+    updateState();
+}
+
+function setPreset(key) {
+    resetAll();
+    const set = (slot, name, val) => {
+        let idx = MOD_LIB.findIndex(m => m.name.includes(name));
+        if(idx>=0) {
+            document.getElementById(`type_${slot}`).value = idx;
+            document.getElementById(`amt_${slot}`).value = val;
+            onModSelect(slot);
+        }
+    };
+    if(key==='growl') {
+        document.getElementById('catSelect').value = "【金属】FM / メタリック";
+        updateWaveList();
+        set(0, "FM", 60); set(1, "Bitcrush", 30); set(2, "Reverb", 40);
+    } else if(key==='pad') {
+        document.getElementById('catSelect').value = "【和音】コード / オルガン";
+        updateWaveList();
+        document.getElementById('waveSelect').selectedIndex = 7; 
+        set(0, "Tremolo", 30); set(1, "Diffusion", 20);
+    } else if(key==='acid') {
+        document.getElementById('catSelect').value = "【基本】アナログ / ベーシック";
+        updateWaveList();
+        document.getElementById('waveSelect').selectedIndex = 5; 
+        set(0, "Fold Dist", 50); set(1, "Saturator", 40);
+    }
+}
+
+// =========================================================
+// 3. ENGINE (Sample Generation - Tuned for Performance)
+// =========================================================
+function calculateSample(t_in, y_in, waveFunc, slotParams, oversampleAmount) {
+    // 8x Oversampling for Export (High Quality)
+    // 1x Oversampling for Preview (Low CPU)
+    const OS = oversampleAmount;
+    let sum = 0;
+    
+    for (let o = 0; o < OS; o++) {
+        // Sub-sample time offset
+        let t = t_in + (o / OS) * (1.0 / 2048.0); 
+        
+        // Pre-Mods
+        for(let i=0; i<SLOT_COUNT; i++) {
+            if(slotParams[i].type === 'phase') {
+                let effectiveAmt = slotParams[i].linked ? (slotParams[i].amt * y_in) : slotParams[i].amt;
+                t = slotParams[i].func(t, effectiveAmt);
+            }
+        }
+        
+        // Safe Wrap for JS
+        t = fract(t);
+
+        let v = waveFunc(t);
+
+        // Post-Mods
+        for(let i=0; i<SLOT_COUNT; i++) {
+            if(slotParams[i].type === 'post') {
+                let effectiveAmt = slotParams[i].linked ? (slotParams[i].amt * y_in) : slotParams[i].amt;
+                v = slotParams[i].func(v, t, effectiveAmt);
+            }
+        }
+        sum += v;
+    }
+    
+    return sum / OS;
+}
+
+function getSlotParams() {
+    let params = [];
+    for(let i=0; i<SLOT_COUNT; i++) {
+        let idx = document.getElementById(`type_${i}`).value;
+        let amt = document.getElementById(`amt_${i}`).value / 100;
+        let linked = document.getElementById(`link_${i}`).checked;
+        params.push({
+            type: MOD_LIB[idx].type,
+            func: MOD_LIB[idx].func,
+            amt: amt,
+            linked: linked
+        });
+    }
+    return params;
+}
+
+// =========================================================
+// 4. VISUALIZER & AUDIO
+// =========================================================
+const canvas = document.getElementById('scope');
+const ctx = canvas.getContext('2d');
+
+function animateScope() {
+    const w = canvas.width;
+    const h = canvas.height;
+    
+    const catSelect = document.getElementById('catSelect');
+    const waveSelect = document.getElementById('waveSelect');
+    if (!catSelect.value || !waveSelect.value) {
+        requestAnimationFrame(animateScope);
+        return;
+    }
+
+    ctx.fillStyle = "#222"; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = "#444"; ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+
+    const cat = catSelect.value;
+    const wIdx = waveSelect.value;
+    const waveFunc = WAVE_LIB[cat][wIdx].func;
+    const slots = getSlotParams();
+
+    // LFO Logic
+    const lfoOn = document.getElementById('lfoToggle').checked;
+    const posSlider = document.getElementById('posSlider');
+    
+    let y = 0;
+    if (lfoOn) {
+        const time = Date.now()/1000;
+        y = (Math.sin(time*2)+1)/2; 
+        posSlider.value = y * 100;
+        posSlider.disabled = true;
+    } else {
+        y = posSlider.value / 100;
+        posSlider.disabled = false;
+    }
+
+    ctx.strokeStyle = "#e91e63";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    // Use 1x OS for visualizer (Speed)
+    for(let i=0; i<w; i++) {
+        let t = i/w;
+        let v = calculateSample(t, y, waveFunc, slots, 1);
+        
+        if(v>1) v=1; if(v<-1) v=-1;
+        let dy = h/2 - (v * h/2.5);
+        if(i===0) ctx.moveTo(i, dy); else ctx.lineTo(i, dy);
+    }
+    ctx.stroke();
+    
+    ctx.fillStyle = "#fff"; ctx.font = "10px monospace";
+    ctx.fillText(`Pos: ${y.toFixed(2)}`, 5, 12);
+    
+    requestAnimationFrame(animateScope);
+}
+
+let audioCtx = null;
+let scriptNode = null;
+let isPlaying = false;
+
+function togglePreview() {
+    const btn = document.getElementById('previewBtn');
+    
+    if (isPlaying) {
+        if(scriptNode) { scriptNode.disconnect(); scriptNode = null; }
+        isPlaying = false;
+        btn.classList.remove('playing');
+        btn.innerText = "🔊 試聴する (Preview)";
+        return;
+    }
+
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+    
+    let phase = 0;
+    const freq = 55.0; 
+    const sr = audioCtx.sampleRate;
+    const phaseIncr = freq / sr;
+
+    scriptNode.onaudioprocess = function(e) {
+        const out = e.outputBuffer.getChannelData(0);
+        
+        const cat = document.getElementById('catSelect').value;
+        const wIdx = document.getElementById('waveSelect').value;
+        const waveFunc = WAVE_LIB[cat][wIdx].func;
+        const slots = getSlotParams();
+        
+        const y = document.getElementById('posSlider').value / 100;
+        const vol = document.getElementById('volSlider').value / 100;
+
+        for (let i = 0; i < out.length; i++) {
+            // Use 1x OS for Real-time Audio (Performance)
+            let val = calculateSample(phase, y, waveFunc, slots, 1);
+            if(val>1) val=1; if(val<-1) val=-1; if(isNaN(val)) val=0;
+            
+            out[i] = val * 0.5 * vol;
+            
+            phase += phaseIncr;
+            // Use fract() equivalent logic for phase wrap
+            if (phase >= 1.0) phase -= 1.0;
+        }
+    };
+
+    scriptNode.connect(audioCtx.destination);
+    isPlaying = true;
+    btn.classList.add('playing');
+    btn.innerText = "⏹ 停止 (Stop)";
+}
+
+// =========================================================
+// 5. WAV EXPORT
+// =========================================================
+function generateWav() {
+    const btn = document.getElementById('dlBtn');
+    const status = document.getElementById('status');
+    btn.disabled = true;
+    status.innerText = "ただいま8倍オーバーサンプリングで書き出し中です...しばらくおまちください。";
+
+    setTimeout(() => {
+        try {
+            const cat = document.getElementById('catSelect').value;
+            const wIdx = document.getElementById('waveSelect').value;
+            let wName = WAVE_LIB[cat][wIdx].name;
+            
+            // Clean filename
+            wName = wName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_');
+            
+            const waveFunc = WAVE_LIB[cat][wIdx].func;
+            const slots = getSlotParams();
+
+            const TABLE_SIZE = 2048;
+            const NUM_FRAMES = 256;
+            const SR = 44100;
+            const totalSamples = TABLE_SIZE * NUM_FRAMES;
+            
+            const buffer = new Float32Array(totalSamples);
+            let maxPeak = 0;
+
+            for(let f=0; f<NUM_FRAMES; f++) {
+                let y = f / (NUM_FRAMES - 1);
+                for(let i=0; i<TABLE_SIZE; i++) {
+                    let t = i / TABLE_SIZE;
+                    // Use 8x OS for Export (Quality)
+                    let v = calculateSample(t, y, waveFunc, slots, 8);
+                    buffer[f*TABLE_SIZE + i] = v;
+                    if(Math.abs(v) > maxPeak) maxPeak = Math.abs(v);
+                }
+            }
+
+            if(maxPeak > 0) {
+                let gain = 0.944 / maxPeak;
+                for(let i=0; i<totalSamples; i++) buffer[i] *= gain;
+            }
+
+            const wavData = encodeWAV(buffer, SR);
+            const blob = new Blob([wavData], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `WT_${wName}_Gen.wav`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            status.innerText = "Done!";
+        } catch(e) {
+            alert(e);
+        }
+        btn.disabled = false;
+    }, 50);
+}
+
+function encodeWAV(samples, sampleRate) {
+    const bufferLength = samples.length * 4;
+    const view = new DataView(new ArrayBuffer(44 + bufferLength));
+    const writeString = (v, o, s) => { for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + bufferLength, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 3, true); 
+    view.setUint16(22, 1, true); 
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 4, true);
+    view.setUint16(32, 4, true);
+    view.setUint16(34, 32, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, bufferLength, true);
+
+    let offset = 44;
+    for(let i=0; i<samples.length; i++) {
+        view.setFloat32(offset, samples[i], true);
+        offset += 4;
+    }
+    return view;
+}
+</script>
+</body>
+</html>
